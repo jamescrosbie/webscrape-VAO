@@ -5,15 +5,17 @@ from selenium.webdriver.common.by import By as BY
 from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup as bs
 import re
+import time
+import numpy as np
 
 
 postcodes = ['LS26 0UH'] # 'LS2 7UA', 'SW1A 1AA']
-output_path = 'C:/Users/James Crosbie/Desktop/'
+output_path = '/home/james/Desktop/'
 delay = 10
 
 
 def init_driver():
-    driver = webdriver.Firefox(executable_path='C:/Users/James Crosbie/Documents/Projects/webScraping/gekoDrivers/geckodriver.exe')
+    driver = webdriver.Firefox()
     driver.wait = WebDriverWait(driver, delay)
     return driver
 
@@ -43,6 +45,12 @@ def write_response_file(myLists):
     with open(output_path+"addressCTBands.csv", "a") as text_file:
         text_file.write(myString)
     counter += 1
+    return
+
+
+def write_error_log(s):
+    with open(output_path+"errors.csv", "a") as text_file:
+        text_file.write(str(s) + '\n')
     return
 
 
@@ -93,11 +101,15 @@ def main():
         page = lookup(driver, query)
 
         #wait for page to load
-        WebDriverWait(driver, delay).until(EC.presence_of_element_located((BY.CLASS_NAME, 'scl_complex')))
+        try:
+            WebDriverWait(driver, delay).until(EC.presence_of_element_located((BY.CLASS_NAME, 'scl_complex')))
+        except TimeoutException:
+            write_error_log(query)
+            continue
 
         try:
             driver.find_element_by_link_text("Next page")
-            while  driver.find_element_by_link_text("Next page"):
+            while driver.find_element_by_link_text("Next page"):
                 #parse page
                 soup = bs(driver.page_source, 'lxml')
                 addressList, ctBandList, impIndList, refList = parsePage(soup)
@@ -105,14 +117,22 @@ def main():
                 write_response_file([addressList, ctBandList, impIndList, refList])
                 #move to next page
                 driver.find_element_by_link_text("Next page").click()
+
                 #wait for page to load
-                WebDriverWait(driver, delay).until(EC.presence_of_element_located((BY.CLASS_NAME, 'scl_complex')))
+                try:
+                    WebDriverWait(driver, delay).until(EC.presence_of_element_located((BY.CLASS_NAME, 'scl_complex')))
+                except TimeoutException:
+                    write_error_log(query)
+                    continue
         except:
             #parse page
             soup = bs(driver.page_source, 'lxml')
             addressList, ctBandList, impIndList, refList = parsePage(soup)
             #add to ouput file
             write_response_file([addressList, ctBandList, impIndList, refList])
+
+        #wait random time so as not to overload server
+        time.sleep(np.random.randint(2, 6))
 
     driver.quit()
 
